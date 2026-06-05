@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Inspecties Linken v3</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --blue:#007AFF; --blue-light:#E8F2FF; --blue-dark:#0062CC;
+  --white:#FFFFFF; --bg:#F5F7FA; --card:#FFFFFF; --border:#E4E8EF;
+  --text:#0D1117; --muted:#6B7585;
+  --danger:#FF3B30; --danger-light:#FFF0EF;
+  --success:#34C759; --success-light:#EDFFF2;
+  --warning:#FF9500; --warning-light:#FFF8EC;
+  --radius:14px; --radius-sm:8px;
+  --shadow:0 2px 12px rgba(0,0,0,0.07); --shadow-lg:0 8px 32px rgba(0,0,0,0.13);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px;}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{display:none;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(135deg,#0062CC 0%,#007AFF 60%,#34AADC 100%);padding:24px;}
+#login-screen.visible{display:flex;}
+.login-box{background:white;border-radius:22px;padding:32px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.2);display:flex;flex-direction:column;gap:20px;}
+.login-logo{width:52px;height:52px;background:var(--blue);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto;}
+.login-logo svg{width:28px;height:28px;stroke:white;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.login-title{font-size:22px;font-weight:700;text-align:center;letter-spacing:-0.4px;}
+.login-sub{font-size:13px;color:var(--muted);text-align:center;margin-top:-12px;}
+.login-field{display:flex;flex-direction:column;gap:5px;}
+.login-field label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+.login-field input{width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);outline:none;transition:border-color 0.15s,box-shadow 0.15s;}
+.login-field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,122,255,0.12);background:white;}
+.login-btn{width:100%;padding:14px;background:var(--blue);color:white;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all 0.15s;}
+.login-btn:active{background:var(--blue-dark);transform:scale(0.98);}
+.login-btn:disabled{background:var(--muted);cursor:not-allowed;}
+.login-err{font-size:13px;color:var(--danger);font-weight:600;text-align:center;min-height:16px;}
+
+/* ── APP SHELL ── */
+#app-shell{display:none;}
+#app-shell.visible{display:block;}
+
+/* ── HEADER ── */
+.header{background:var(--white);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:200;}
+.header-logo{width:34px;height:34px;background:var(--blue);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header-logo svg{width:18px;height:18px;stroke:white;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.header-title{font-size:17px;font-weight:700;letter-spacing:-0.3px;}
+.header-sub{font-size:11px;color:var(--muted);}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sync-dot.ok{background:var(--success);}
+.sync-dot.saving{background:var(--warning);animation:pulse 1s infinite;}
+.sync-dot.error{background:var(--danger);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+#sync-label{font-size:11px;font-weight:600;color:var(--muted);}
+.user-badge{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-light);padding:4px 9px;border-radius:100px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;}
+.logout-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.logout-btn:active{background:var(--danger-light);color:var(--danger);border-color:var(--danger);}
+
+/* ── TABS ── */
+.tab-bar{background:var(--white);border-bottom:1px solid var(--border);display:flex;position:sticky;top:60px;z-index:190;}
+.tab-btn{flex:1;padding:10px 4px 8px;border:none;background:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;border-bottom:3px solid transparent;transition:all 0.15s;-webkit-tap-highlight-color:transparent;}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-btn .t-icon{font-size:18px;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* ── MAIN ── */
+main{max-width:620px;margin:0 auto;padding:14px 12px;display:flex;flex-direction:column;gap:13px;}
+
+/* ── CARD ── */
+.card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);}
+.card-header{padding:12px 15px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.card-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--blue-light);flex-shrink:0;}
+.card-title{font-size:14px;font-weight:700;flex:1;}
+.card-body{padding:14px 15px;display:flex;flex-direction:column;gap:11px;}
+
+/* ── FORM ── */
+.field{display:flex;flex-direction:column;gap:4px;}
+label.lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+input[type="text"],input[type="number"],input[type="email"],input[type="password"],select,textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);outline:none;transition:border-color 0.15s,box-shadow 0.15s;appearance:none;-webkit-appearance:none;}
+textarea{resize:vertical;min-height:68px;line-height:1.5;}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,122,255,0.12);background:white;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7585' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;}
+
+/* ── SEARCH BAR ── */
+.search-bar{position:relative;}
+.search-bar input{padding-left:38px;background:var(--bg);}
+.search-bar::before{content:'🔍';position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;}
+
+/* ── PILLS ── */
+.pills,.radio-pills{display:flex;flex-wrap:wrap;gap:6px;}
+.pill,.radio-pill{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1.5px solid var(--border);border-radius:100px;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.12s;user-select:none;background:var(--white);color:var(--text);-webkit-tap-highlight-color:transparent;}
+.pill.selected,.radio-pill.selected{background:var(--blue);border-color:var(--blue);color:white;font-weight:600;}
+.pill:active,.radio-pill:active{transform:scale(0.96);}
+
+/* ── DAMAGE LINE ── */
+.damage-line{border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--white);}
+.dl-header{padding:10px 12px;background:var(--bg);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+.dl-num{width:22px;height:22px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;flex-shrink:0;}
+.dl-label{font-size:13px;font-weight:700;flex:1;color:var(--text);}
+.dl-preview{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;flex:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dl-body{padding:13px;display:flex;flex-direction:column;gap:12px;}
+.dl-section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:-4px;}
+.dl-collapsed{display:none;padding:10px 12px;align-items:center;gap:10px;}
+
+/* ── PHOTO ZONE ── */
+.photo-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--bg);}
+.photo-zone:active,.photo-zone.drag-over{border-color:var(--blue);background:var(--blue-light);}
+.photo-zone-icon{font-size:26px;margin-bottom:4px;}
+.photo-zone-text{font-size:13px;font-weight:600;color:var(--muted);}
+.photo-zone-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
+.photo-thumb-wrap{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--bg);}
+.photo-thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+.photo-thumb-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;color:white;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;}
+.photo-thumb-status{position:absolute;bottom:4px;left:4px;right:4px;height:3px;border-radius:2px;background:rgba(255,255,255,0.3);overflow:hidden;display:none;}
+.photo-thumb-status .bar{height:100%;background:var(--success);width:0%;transition:width 0.3s;}
+.photo-uploading .photo-thumb-status{display:block;}
+.photo-upload-done::after{content:'✓';position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--success);color:white;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+
+/* ── OUTPUT PREVIEW ── */
+.output-preview{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;font-family:'DM Mono',monospace;color:var(--text);word-break:break-all;line-height:1.6;}
+.output-preview .seg{color:var(--blue);font-weight:600;}
+.output-preview .sep{color:var(--muted);}
+
+/* ── BUTTONS ── */
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px 18px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;border:none;cursor:pointer;transition:all 0.15s;-webkit-tap-highlight-color:transparent;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:active{background:var(--blue-dark);transform:scale(0.98);}
+.btn-success{background:var(--success);color:white;}
+.btn-success:active{opacity:0.85;transform:scale(0.98);}
+.btn-danger{background:var(--danger);color:white;}
+.btn-danger:active{opacity:0.85;transform:scale(0.98);}
+.btn-danger-soft{background:transparent;color:var(--danger);border:1.5px solid var(--danger);}
+.btn-danger-soft:active{background:var(--danger-light);}
+.btn-muted{background:var(--bg);color:var(--text);border:1.5px solid var(--border);}
+.btn-warning-soft{background:var(--warning-light);color:var(--warning);border:1.5px solid var(--warning);}
+.btn-full{width:100%;}
+.btn-sm{padding:7px 11px;font-size:12px;border-radius:7px;}
+
+/* ── STATUS BADGE ── */
+.verwerkt-badge{display:inline-flex;align-items:center;gap:5px;background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:100px;padding:3px 10px;font-size:12px;font-weight:700;}
+
+/* ── SAVE BAR ── */
+.save-bar{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);}
+.save-bar-info{flex:1;}
+.save-bar-title{font-size:13px;font-weight:700;}
+.save-bar-sub{font-size:11px;color:var(--muted);}
+
+/* ── EXPORT GRID ── */
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.export-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:14px 10px;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--white);cursor:pointer;transition:all 0.15s;-webkit-tap-highlight-color:transparent;}
+.export-btn:active{border-color:var(--blue);background:var(--blue-light);}
+.e-icon{font-size:22px;}
+.e-label{font-size:13px;font-weight:600;}
+.e-sub{font-size:11px;color:var(--muted);}
+
+/* ── COUNT BADGE ── */
+.count-badge{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 5px;background:var(--blue);color:white;border-radius:10px;font-size:11px;font-weight:700;margin-left:5px;}
+
+/* ── ADD ROW ── */
+.add-row{padding:12px 15px;border-top:1px solid var(--border);}
+
+/* ── DASHBOARD ── */
+.inspection-card{padding:13px 15px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s;position:relative;}
+.inspection-card:last-child{border-bottom:none;}
+.inspection-card:active{background:var(--bg);}
+.ic-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px;}
+.ic-name{font-size:15px;font-weight:700;}
+.ic-vin{font-family:'DM Mono',monospace;font-size:12px;color:var(--blue);font-weight:600;}
+.ic-date{font-size:11px;color:var(--muted);white-space:nowrap;}
+.ic-meta{font-size:12px;color:var(--muted);display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.ic-tag{background:var(--bg);border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;}
+.ic-tag.blue{background:var(--blue-light);color:var(--blue);}
+.ic-tag.green{background:var(--success-light);color:var(--success);}
+.ic-inspector{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;flex-direction:column;gap:8px;padding:12px 15px;border-bottom:1px solid var(--border);background:var(--bg);}
+
+/* ── DETAIL MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:900;display:none;align-items:flex-end;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-sheet{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:620px;max-height:92vh;overflow-y:auto;padding-bottom:32px;}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+.modal-header{padding:13px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.modal-title{font-size:16px;font-weight:700;flex:1;}
+.modal-close{background:var(--bg);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+.modal-body{padding:15px 17px;display:flex;flex-direction:column;gap:14px;}
+.detail-section{display:flex;flex-direction:column;gap:7px;}
+.detail-section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;}
+.detail-row{display:flex;gap:8px;font-size:13px;}
+.detail-key{color:var(--muted);min-width:100px;}
+.detail-val{font-weight:600;}
+.damage-detail-item{background:var(--bg);border-radius:var(--radius-sm);padding:12px;}
+.ddi-loc{font-size:14px;font-weight:700;margin-bottom:5px;}
+.ddi-row{font-size:12px;color:var(--muted);margin-bottom:3px;}
+.ddi-val{color:var(--text);font-weight:500;}
+.photo-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.photo-gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:7px;cursor:pointer;}
+
+/* ── CONFIRM DIALOG ── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:24px;}
+.confirm-overlay.open{display:flex;}
+.confirm-box{background:white;border-radius:18px;padding:28px 24px;width:100%;max-width:340px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;gap:18px;}
+.confirm-icon{font-size:40px;text-align:center;}
+.confirm-title{font-size:17px;font-weight:700;text-align:center;}
+.confirm-msg{font-size:14px;color:var(--muted);text-align:center;line-height:1.5;}
+.confirm-btns{display:flex;gap:10px;}
+
+/* ── DOWNLOAD MANAGER ── */
+/* ── Foto galerij grid (Download Manager) ── */
+.photo-gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+@media(min-width:400px){.photo-gallery-grid{grid-template-columns:repeat(4,1fr);}}
+@media(min-width:540px){.photo-gallery-grid{grid-template-columns:repeat(5,1fr);}}
+.pg-thumb{position:relative;aspect-ratio:1;overflow:hidden;background:var(--bg);cursor:pointer;}
+.pg-thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 0.15s;}
+.pg-thumb:active img{transform:scale(0.96);}
+.pg-loc-label{position:absolute;bottom:0;left:0;right:0;padding:3px 5px;background:linear-gradient(transparent,rgba(0,0,0,0.55));color:white;font-size:9px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
+
+/* ── STATUS BANNER ── */
+.status-banner{border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
+.status-banner.success{background:var(--success-light);color:var(--success);}
+.status-banner.error{background:var(--danger-light);color:var(--danger);}
+.status-banner.info{background:var(--blue-light);color:var(--blue);}
+.status-banner.warning{background:var(--warning-light);color:var(--warning);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:white;padding:11px 20px;border-radius:100px;font-size:14px;font-weight:500;white-space:nowrap;transition:transform 0.3s cubic-bezier(.34,1.56,.64,1);z-index:9999;box-shadow:var(--shadow-lg);}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ── SPINNER ── */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,0.1);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════ -->
+<div id="login-screen" class="visible">
+  <div class="login-box">
+    <div class="login-logo">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div>
+      <div class="login-title">Inspecties Linken</div>
+    </div>
+    <div class="login-field">
+      <label>E-mailadres</label>
+      <input type="email" id="login-email" placeholder="naam@bedrijf.nl" autocomplete="email" />
+    </div>
+    <div class="login-field">
+      <label>Wachtwoord</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Inloggen</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════ -->
+<div id="app-shell">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">
+    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </div>
+  <div>
+    <div class="header-title">Inspecties Linken</div>
+    <div class="header-sub" id="header-sub">v3</div>
+  </div>
+  <div class="header-right">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-label">–</span>
+    <div class="user-badge" id="user-badge"></div>
+    <button class="logout-btn" onclick="doLogout()">Uitloggen</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('inspectie',this)"><span class="t-icon">🔍</span><span>Inspectie</span></button>
+  <button class="tab-btn" onclick="switchTab('dashboard',this)"><span class="t-icon">🗂️</span><span>Dashboard</span></button>
+  <button class="tab-btn" onclick="switchTab('downloads',this)"><span class="t-icon">📥</span><span>Downloads</span></button>
+</div>
+<div id="offline-banner" style="display:none;background:var(--warning);color:white;text-align:center;padding:7px 16px;font-size:13px;font-weight:600;position:sticky;top:104px;z-index:185;">📡 Offline — wijzigingen worden lokaal bewaard</div>
+
+<!-- ══════════════════════════════════════
+     TAB 1 – INSPECTIE
+══════════════════════════════════════ -->
+<div class="tab-pane active" id="tab-inspectie">
+<main>
+
+  <div class="card">
+    <div class="card-header"><div class="card-icon">🚗</div><div class="card-title">Voertuiggegevens</div></div>
+    <div class="card-body">
+      <div class="field-row">
+        <div class="field"><label class="lbl">Merk</label>
+          <select id="v_merk"><option value="">Kies merk</option><option>Cupra</option><option>Seat</option><option>Skoda</option></select>
+        </div>
+        <div class="field"><label class="lbl">Type</label><input type="text" id="v_type" placeholder="bijv. Leon" /></div>
+      </div>
+      <div class="field">
+        <label class="lbl">VIN-nummer</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="v_vin" placeholder="17-cijferig VIN" maxlength="17"
+            style="font-family:'DM Mono',monospace;letter-spacing:1px;flex:1;text-transform:uppercase;"
+            oninput="handleVINInput(this)" />
+          <button onclick="copyVIN()" style="padding:11px 13px;background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--radius-sm);color:var(--blue);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;flex-shrink:0;">📋 VIN</button>
+        </div>
+        <div id="vin-error" style="display:none;font-size:12px;color:var(--danger);font-weight:600;margin-top:3px;"></div>
+        <div id="vin-ok" style="display:none;font-size:12px;color:var(--success);font-weight:600;margin-top:3px;">✓ Geldig VIN-nummer</div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label class="lbl">Kleur</label><input type="text" id="v_kleur" placeholder="bijv. Zilver" /></div>
+        <div class="field"><label class="lbl">Transmissie</label>
+          <select id="v_transmissie"><option value="">Kies</option><option>Handgeschakeld</option><option>Automaat</option></select>
+        </div>
+      </div>
+      <div class="field"><label class="lbl">Aandrijving</label>
+        <select id="v_aandrijving"><option value="">Kies aandrijving</option><option>Aandrijving op alle wielen</option><option>Aandrijving op voorwielen</option><option>Aandrijving op achterwielen</option></select>
+      </div>
+      <div class="field"><label class="lbl">Bekleding</label>
+        <select id="v_bekleding"><option value="">Kies bekleding</option><option>Alcantara</option><option>Alcantara/leer</option><option>Leer</option><option>Stof</option><option>Stof/leer</option></select>
+      </div>
+      <div class="field"><label class="lbl">KM-stand</label><input type="number" id="v_kmstand" inputmode="numeric" min="0" /></div>
+      <div class="field-row">
+        <div class="field"><label class="lbl">Tot service</label><input type="number" id="v_service_val" inputmode="numeric" min="0" /></div>
+        <div class="field"><label class="lbl">Eenheid</label>
+          <select id="v_service_unit"><option value="km">km</option><option value="dagen">dagen</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-icon">🔍</div><div class="card-title">Schadelijnen <span class="count-badge" id="damage-count">0</span></div></div>
+    <div id="damage-lines" style="padding:12px 13px;display:flex;flex-direction:column;gap:12px;"></div>
+    <div class="add-row"><button class="btn btn-primary btn-full" onclick="addDamageLine()">+ Schadelijn toevoegen</button></div>
+  </div>
+
+  <div class="save-bar">
+    <div style="font-size:22px;">☁️</div>
+    <div class="save-bar-info">
+      <div class="save-bar-title">Cloud opslaan</div>
+      <div class="save-bar-sub" id="last-saved-label">Nog niet opgeslagen</div>
+    </div>
+    <button class="btn btn-success btn-sm" onclick="saveToSupabase(true)" id="save-btn">Opslaan</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-icon">📤</div><div class="card-title">Exporteren</div></div>
+    <div class="card-body">
+      <div class="export-grid">
+        <button class="export-btn" onclick="exportPDF()"><span class="e-icon">📄</span><span class="e-label">PDF Rapport</span><span class="e-sub">Met foto's</span></button>
+        <button class="export-btn" onclick="exportWhatsApp()"><span class="e-icon">💬</span><span class="e-label">WhatsApp</span><span class="e-sub">Samenvatting</span></button>
+        <button class="export-btn" onclick="copyAll()"><span class="e-icon">📋</span><span class="e-label">Kopiëren</span><span class="e-sub">Alle lijnen</span></button>
+        <button class="export-btn" onclick="resetApp()"><span class="e-icon">🔄</span><span class="e-label">Nieuw</span><span class="e-sub" style="color:var(--danger)">Alles wissen</span></button>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB 2 – DASHBOARD
+══════════════════════════════════════ -->
+<div class="tab-pane" id="tab-dashboard">
+<main>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+    <div style="font-size:16px;font-weight:700;">Inspecties overzicht</div>
+    <button class="btn btn-muted btn-sm" onclick="fetchDashboard()">🔄 Ververs</button>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="card" style="overflow:visible;">
+    <div class="filter-bar">
+      <div class="search-bar">
+        <input type="text" id="dash-search" placeholder="Zoek op VIN / chassisnummer…" oninput="applyDashFilters()" />
+      </div>
+      <div class="field-row" style="margin:0;">
+        <div class="field">
+          <select id="dash-filter-inspector" onchange="applyDashFilters()">
+            <option value="">Alle inspecteurs</option>
+          </select>
+        </div>
+        <div class="field">
+          <select id="dash-filter-status" onchange="applyDashFilters()">
+            <option value="">Alle statussen</option>
+            <option value="open">Nog te verwerken</option>
+            <option value="done">✅ Verwerkt</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="dashboard-list">
+    <div style="padding:20px;text-align:center;color:var(--muted);"><div class="spinner" style="margin:0 auto 8px;"></div><div>Ophalen…</div></div>
+  </div>
+</main>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB 3 – DOWNLOADS
+══════════════════════════════════════ -->
+<div class="tab-pane" id="tab-downloads">
+<main>
+  <div style="font-size:16px;font-weight:700;">Download Manager</div>
+  <div class="status-banner info" id="dl-banner">📱 Selecteer een inspectie om foto's te downloaden.</div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-icon">🔍</div><div class="card-title">Zoek op chassisnummer</div></div>
+    <div class="card-body">
+      <div class="search-bar">
+        <input type="text" id="dl-search" placeholder="Type VIN om te zoeken…" oninput="filterDlSelect()" style="text-transform:uppercase;" />
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-icon">🚗</div><div class="card-title">Of kies uit lijst</div></div>
+    <div class="card-body">
+      <select id="dl-select" onchange="loadDownloadManager()">
+        <option value="">Laad inspecties…</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="download-list"></div>
+</main>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal" onclick="closeModalOnBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Details</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title" id="confirm-title">Inspectie verwijderen?</div>
+    <div class="confirm-msg" id="confirm-msg">Weet je zeker dat je deze inspectie definitief wilt verwijderen? Dit kan niet ongedaan worden gemaakt!</div>
+    <div class="confirm-btns">
+      <button class="btn btn-muted btn-full" onclick="closeConfirm()">Annuleren</button>
+      <button class="btn btn-danger btn-full" id="confirm-ok-btn">Definitief verwijderen</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  CONFIG & SUPABASE
+// ═══════════════════════════════════════════════
+const SUPABASE_URL     = 'https://towsgtytlkjsbcgacado.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_J5olUK6DP_wCvWs0Z2-3Yw_MPlDGvOO';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ═══════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════
+const SLIJTAGE = ['Gebruikersspoor','Kleine beschadiging','Middelzware beschadiging','Grote beschadiging'];
+const TYPE_BESCHADIGING = ['Brandgaatje','Brandplek','Deuk','Deuk / lakschade','Gebroken / gescheurd','Kras','Lakschade','Marterschade','Met krassen / afschavingen','Niet vakkundig hersteld','Ontbreekt','Steenslag','Verkeerde stand','Versleten','Vuil'];
+const HERSTELMETHODE = ['Aanbrengen / polijsten','Lakken','Ozonbehandeling','Reinigen','Repareren & lakken','Repareren & schilderwerk (s2)','Smart repair','Vernieuwen','Waardevermindering'];
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let state = {
+  vehicle: { merk:'', type:'', vin:'', kleur:'', aandrijving:'', transmissie:'', bekleding:'', kmstand:'', service_val:'', service_unit:'km' },
+  damageLines: []
+};
+let currentUser = null;
+let syncStatus  = 'idle';
+let autoSaveTimer = null;
+let dashboardData = []; // raw fetched rows for filtering
+
+// ═══════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  // Check bestaande sessie
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && session.user) {
+    currentUser = session.user;
+    bootApp();
+  }
+  // Luister op auth changes (bv. token refresh)
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session && session.user && !currentUser) {
+      currentUser = session.user;
+      bootApp();
+    } else if (!session) {
+      currentUser = null;
+      showLoginScreen();
+    }
+  });
+});
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const err   = document.getElementById('login-err');
+  const btn   = document.getElementById('login-btn');
+  err.textContent = '';
+  if (!email || !pass) { err.textContent = 'Vul e-mail en wachtwoord in.'; return; }
+  btn.disabled = true; btn.textContent = 'Bezig…';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) {
+    err.textContent = error.message === 'Invalid login credentials'
+      ? 'Onjuist e-mailadres of wachtwoord.'
+      : error.message;
+    btn.disabled = false; btn.textContent = 'Inloggen';
+    return;
+  }
+  currentUser = data.user;
+  bootApp();
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  showLoginScreen();
+}
+
+function showLoginScreen() {
+  document.getElementById('login-screen').classList.add('visible');
+  document.getElementById('app-shell').classList.remove('visible');
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('login-screen').style.display = '';
+}
+
+function bootApp() {
+  document.getElementById('login-screen').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-shell').classList.add('visible');
+  document.getElementById('app-shell').style.display = 'block';
+
+  // Toon user email in header
+  const email = currentUser.email || '';
+  document.getElementById('user-badge').textContent = email;
+  document.getElementById('header-sub').textContent = 'v3 · ' + email.split('@')[0];
+
+  // Laad lokale state en render
+  load();
+  fillVehicle();
+  bindVehicle();
+  state.damageLines.forEach(l => renderLine(l));
+  updateCount();
+  setSyncStatus('idle','–');
+  updateOnlineStatus();
+  (async()=>{
+    for(const line of state.damageLines){
+      const stored=await idbGetPhotos(line.id).catch(()=>[]);
+      for(const {id,file} of stored){
+        if(!line.pendingFiles)line.pendingFiles=[];
+        line.pendingFiles.push(file);
+        fileIdbIds.set(file,id);
+      }
+      if(stored.length>0) renderPhotos(line.id);
+    }
+  })();
+  setTimeout(() => { fetchDashboard(); populateDlSelect(); }, 700);
+}
+
+// ═══════════════════════════════════════════════
+//  LOCAL PERSIST
+// ═══════════════════════════════════════════════
+function save() {
+  try {
+    const s = JSON.parse(JSON.stringify(state));
+    s.damageLines.forEach(l => { delete l.pendingFiles; });
+    localStorage.setItem('il3_state', JSON.stringify(s));
+  } catch(e) {}
+}
+function load() {
+  try {
+    const s = localStorage.getItem('il3_state');
+    if (s) state = JSON.parse(s);
+    state.damageLines.forEach(l => { if (!l.photos) l.photos=[]; if (!l.pendingFiles) l.pendingFiles=[]; });
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
+//  VEHICLE
+// ═══════════════════════════════════════════════
+function fillVehicle() {
+  ['merk','type','vin','kleur','aandrijving','transmissie','bekleding','kmstand','service_val','service_unit'].forEach(k => {
+    const el = document.getElementById('v_'+k);
+    if (el) el.value = state.vehicle[k] || '';
+  });
+}
+function bindVehicle() {
+  ['merk','type','vin','kleur','aandrijving','transmissie','bekleding','kmstand','service_val','service_unit'].forEach(k => {
+    const el = document.getElementById('v_'+k);
+    if (!el) return;
+    el.addEventListener('input',  () => { state.vehicle[k]=el.value; save(); scheduleAutoSave(); });
+    el.addEventListener('change', () => { state.vehicle[k]=el.value; save(); scheduleAutoSave(); });
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id==='dashboard') fetchDashboard();
+  if (id==='downloads') populateDlSelect();
+}
+
+// ═══════════════════════════════════════════════
+//  LINE MANAGEMENT
+// ═══════════════════════════════════════════════
+function addDamageLine() {
+  const line={id:'dl_'+Date.now(),locatie:'',slijtage:'',types:[],herstel:[],opmerking:'',photos:[],pendingFiles:[],collapsed:false};
+  state.damageLines.push(line);
+  renderLine(line);
+  updateCount();
+  save();
+  setTimeout(()=>{ const el=document.getElementById('line-'+line.id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },50);
+}
+function deleteLine(id) {
+  state.damageLines=state.damageLines.filter(l=>l.id!==id);
+  const el=document.getElementById('line-'+id); if(el) el.remove();
+  updateCount(); renumberLines(); save();
+}
+function renumberLines() {
+  state.damageLines.forEach((line,i)=>{
+    const n=document.querySelector(`#line-${line.id} .dl-num`); if(n) n.textContent=i+1;
+    const l=document.querySelector(`#line-${line.id} .dl-label`); if(l) l.textContent=`Schadelijn ${i+1}`;
+  });
+}
+function updateCount() {
+  const el=document.getElementById('damage-count'); if(el) el.textContent=state.damageLines.length;
+}
+
+// ═══════════════════════════════════════════════
+//  RENDER LINE
+// ═══════════════════════════════════════════════
+function renderLine(line) {
+  const container=document.getElementById('damage-lines');
+  const idx=state.damageLines.indexOf(line)+1;
+  const div=document.createElement('div');
+  div.className='damage-line'; div.id='line-'+line.id;
+  div.innerHTML=`
+    <div class="dl-header">
+      <div class="dl-num">${idx}</div>
+      <div class="dl-label">Schadelijn ${idx}</div>
+      <div class="dl-preview" id="prev-${line.id}"></div>
+      <button class="btn btn-sm btn-danger-soft" onclick="deleteLine('${line.id}')">✕</button>
+    </div>
+    <div class="dl-body">
+      <div class="field">
+        <div class="dl-section-title">1. Locatie</div>
+        <input type="text" id="loc-${line.id}" value="${esc(line.locatie)}"
+          placeholder="bijv. Velg LV, bumper voor, deur RA…"
+          oninput="setField('${line.id}','locatie',this.value)" />
+      </div>
+      <div class="field">
+        <div class="dl-section-title">2. Slijtage</div>
+        <div class="radio-pills" id="slijtage-${line.id}">
+          ${SLIJTAGE.map(s=>`<div class="radio-pill ${line.slijtage===s?'selected':''}" onclick="setSlijtage('${line.id}','${s}')">${s}</div>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <div class="dl-section-title">3. Type beschadiging</div>
+        <div class="pills" id="types-${line.id}">
+          ${TYPE_BESCHADIGING.map(t=>`<div class="pill ${line.types.includes(t)?'selected':''}" onclick="toggleMulti('${line.id}','types','${t}')">${t}</div>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <div class="dl-section-title">4. Herstelmethode</div>
+        <div class="pills" id="herstel-${line.id}">
+          ${HERSTELMETHODE.map(h=>`<div class="pill ${line.herstel.includes(h)?'selected':''}" onclick="toggleMulti('${line.id}','herstel','${h}')">${h}</div>`).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <div class="dl-section-title">5. Foto's</div>
+        <div class="photo-zone" onclick="triggerPhotoInput('${line.id}')" id="zone-${line.id}">
+          <div class="photo-zone-icon">📷</div>
+          <div class="photo-zone-text">Foto's toevoegen</div>
+          <div class="photo-zone-sub">Tik hier of sleep foto's neer</div>
+        </div>
+        <input type="file" id="photo-input-${line.id}" accept="image/*" multiple style="display:none"
+          onchange="handlePhotoSelect('${line.id}',this.files)" />
+        <div class="photo-grid" id="photo-grid-${line.id}"></div>
+      </div>
+      <div class="field">
+        <div class="dl-section-title">6. Opmerkingen</div>
+        <textarea id="opm-${line.id}" placeholder="Extra details…"
+          oninput="setField('${line.id}','opmerking',this.value)">${esc(line.opmerking)}</textarea>
+      </div>
+      <div class="output-preview" id="out-${line.id}"></div>
+      <button class="btn btn-success btn-full" onclick="closeLine('${line.id}')">✓ Schadelijn sluiten & opslaan</button>
+    </div>
+    <div class="dl-collapsed" id="collapsed-${line.id}">
+      <div class="dl-num" id="cnum-${line.id}">${idx}</div>
+      <div style="flex:1;font-size:13px;font-family:'DM Mono',monospace;color:var(--text);line-height:1.5;" id="csummary-${line.id}"></div>
+      <button onclick="expandLine('${line.id}')" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px;color:var(--muted);">✏️</button>
+    </div>`;
+  container.appendChild(div);
+  // Drag & drop
+  const zone=div.querySelector(`#zone-${line.id}`);
+  zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over');});
+  zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
+  zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');handlePhotoSelect(line.id,e.dataTransfer.files);});
+  if (line.collapsed) { collapseLine(line.id,true); } else { refreshPreview(line.id); renderPhotos(line.id); }
+}
+
+// ═══════════════════════════════════════════════
+//  FIELD SETTERS
+// ═══════════════════════════════════════════════
+function setField(id,key,val){const l=getLine(id);if(!l)return;l[key]=val;refreshPreview(id);save();scheduleAutoSave();}
+function setSlijtage(id,val){
+  const l=getLine(id);if(!l)return;
+  l.slijtage=(l.slijtage===val)?'':val;
+  document.querySelectorAll(`#slijtage-${id} .radio-pill`).forEach(el=>el.classList.toggle('selected',el.textContent.trim()===l.slijtage));
+  refreshPreview(id);save();scheduleAutoSave();
+}
+function toggleMulti(id,key,val){
+  const l=getLine(id);if(!l)return;
+  l[key]=(l[key][0]===val)?[]:[val];
+  document.getElementById(key==='types'?'types-'+id:'herstel-'+id).querySelectorAll('.pill').forEach(el=>el.classList.toggle('selected',l[key].includes(el.textContent.trim())));
+  refreshPreview(id);save();scheduleAutoSave();
+}
+
+// ═══════════════════════════════════════════════
+//  PHOTOS
+// ═══════════════════════════════════════════════
+function triggerPhotoInput(id){const inp=document.getElementById('photo-input-'+id);inp.value='';inp.click();}
+
+async function handlePhotoSelect(id,files){
+  const l=getLine(id);if(!l)return;
+  if(!l.pendingFiles)l.pendingFiles=[];
+  for(const file of Array.from(files)){
+    const c=await compressImage(file,1600);
+    l.pendingFiles.push(c);
+    idbSavePhoto(id,c).then(idbId=>{if(idbId!=null)fileIdbIds.set(c,idbId);}).catch(()=>{});
+  }
+  renderPhotos(id);save();
+}
+
+function renderPhotos(id){
+  const l=getLine(id);if(!l)return;
+  const grid=document.getElementById('photo-grid-'+id);if(!grid)return;
+  grid.innerHTML='';
+  (l.photos||[]).forEach((url,i)=>{
+    const w=document.createElement('div');
+    w.className='photo-thumb-wrap photo-upload-done';
+    w.innerHTML=`<img src="${url}" loading="lazy"><button class="photo-thumb-del" onclick="removeUploadedPhoto('${id}',${i})">✕</button>`;
+    grid.appendChild(w);
+  });
+  (l.pendingFiles||[]).forEach((file,i)=>{
+    const url=URL.createObjectURL(file);
+    const w=document.createElement('div');
+    w.className='photo-thumb-wrap'; w.id=`pending-photo-${id}-${i}`;
+    w.innerHTML=`<img src="${url}"><button class="photo-thumb-del" onclick="removePendingPhoto('${id}',${i})">✕</button><div class="photo-thumb-status"><div class="bar" id="bar-${id}-${i}"></div></div>`;
+    grid.appendChild(w);
+  });
+  const zone=document.getElementById('zone-'+id);
+  const total=(l.photos||[]).length+(l.pendingFiles||[]).length;
+  if(zone){
+    const zt=zone.querySelector('.photo-zone-text');
+    const zs=zone.querySelector('.photo-zone-sub');
+    if(zt) zt.textContent=total>0?"Meer foto's toevoegen":"Foto's toevoegen";
+    if(zs) zs.textContent=total>0?`${total} foto${total!==1?"'s":""}  toegevoegd`:"Tik hier of sleep foto's neer";
+  }
+}
+
+function removeUploadedPhoto(id,idx){const l=getLine(id);if(!l)return;l.photos.splice(idx,1);renderPhotos(id);save();scheduleAutoSave();}
+function removePendingPhoto(id,idx){const l=getLine(id);if(!l)return;const f=l.pendingFiles[idx];const iid=fileIdbIds.get(f);if(iid!=null)idbDeletePhoto(iid).catch(()=>{});l.pendingFiles.splice(idx,1);renderPhotos(id);save();}
+
+function compressImage(file,maxWidth){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const scale=Math.min(1,maxWidth/img.width);
+        const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(blob=>{resolve(new File([blob],file.name,{type:'image/jpeg'}));}, 'image/jpeg',0.82);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  PREVIEW
+// ═══════════════════════════════════════════════
+function buildOutput(line){
+  const parts=[];
+  if(line.locatie)       parts.push(line.locatie);
+  if(line.types.length)  parts.push(line.types.join(', '));
+  if(line.slijtage)      parts.push(line.slijtage);
+  if(line.herstel.length)parts.push(line.herstel.join(', '));
+  if(line.opmerking)     parts.push(line.opmerking);
+  return parts;
+}
+function refreshPreview(id){
+  const l=getLine(id);if(!l)return;
+  const parts=buildOutput(l);
+  const outEl=document.getElementById('out-'+id);
+  const prevEl=document.getElementById('prev-'+id);
+  if(outEl) outEl.innerHTML=parts.length===0?'—':parts.map((p,i)=>`<span class="seg">${esc(p)}</span>${i<parts.length-1?'<span class="sep"> | </span>':''}`).join('');
+  if(prevEl) prevEl.textContent=parts.slice(0,2).join(' · ')||'';
+}
+
+// ═══════════════════════════════════════════════
+//  COLLAPSE / EXPAND
+// ═══════════════════════════════════════════════
+function collapseLine(id,silent){
+  const l=getLine(id);if(!l)return;
+  l.collapsed=true;if(!silent)save();
+  const body=document.querySelector(`#line-${id} .dl-body`);
+  const collapsed=document.getElementById('collapsed-'+id);
+  if(body)body.style.display='none';
+  if(collapsed){
+    const summary=document.getElementById('csummary-'+id);
+    const cnum=document.getElementById('cnum-'+id);
+    const cnt=(l.photos||[]).length+(l.pendingFiles||[]).length;
+    let txt=buildOutput(l).join(' | ')||'—';
+    if(cnt>0)txt+=` 📷${cnt}`;
+    if(summary)summary.textContent=txt;
+    if(cnum)cnum.textContent=state.damageLines.indexOf(l)+1;
+    collapsed.style.display='flex';
+  }
+}
+function expandLine(id){
+  const l=getLine(id);if(!l)return;
+  l.collapsed=false;save();
+  const body=document.querySelector(`#line-${id} .dl-body`);
+  const collapsed=document.getElementById('collapsed-'+id);
+  if(body)body.style.display='flex';
+  if(collapsed)collapsed.style.display='none';
+  refreshPreview(id);renderPhotos(id);
+}
+async function closeLine(id){collapseLine(id);await saveToSupabase(false);}
+
+// ═══════════════════════════════════════════════
+//  AUTO SAVE
+// ═══════════════════════════════════════════════
+function scheduleAutoSave(){clearTimeout(autoSaveTimer);autoSaveTimer=setTimeout(()=>saveToSupabase(false),8000);}
+
+// ═══════════════════════════════════════════════
+//  SYNC STATUS UI
+// ═══════════════════════════════════════════════
+function setSyncStatus(status,label){
+  syncStatus=status;
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-label');
+  if(dot) dot.className='sync-dot '+(status==='ok'?'ok':status==='saving'?'saving':status==='error'?'error':'');
+  if(lbl) lbl.textContent=label;
+}
+
+// ═══════════════════════════════════════════════
+//  SUPABASE – SAVE (UPSERT)
+// ═══════════════════════════════════════════════
+async function saveToSupabase(showFeedback=true){
+  const vin=state.vehicle.vin.trim();
+  if(!vin||vin.length!==17){
+    if(showFeedback)showToast('⚠️ Vul eerst een geldig 17-cijferig VIN in!');
+    return;
+  }
+  if(!currentUser){showToast('⚠️ Niet ingelogd!');return;}
+
+  setSyncStatus('saving','Bezig…');
+  const saveBtn=document.getElementById('save-btn');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='…';}
+
+  try {
+    // Upload foto's per schadelijn
+    for(const line of state.damageLines){
+      if(!line.pendingFiles)line.pendingFiles=[];
+      if(!line.photos)line.photos=[];
+      for(let i=0;i<line.pendingFiles.length;i++){
+        const file=line.pendingFiles[i];
+        const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+        const path=`${vin}/${line.id}_${Date.now()}_${i}.${ext}`;
+        const wrap=document.getElementById(`pending-photo-${line.id}-${i}`);
+        if(wrap)wrap.classList.add('photo-uploading');
+        const bar=document.getElementById(`bar-${line.id}-${i}`);
+        if(bar)bar.style.width='30%';
+        const{error:upErr}=await sb.storage.from('damage-photos').upload(path,file,{upsert:true});
+        if(upErr)throw upErr;
+        if(bar)bar.style.width='100%';
+        const{data:urlData}=sb.storage.from('damage-photos').getPublicUrl(path);
+        line.photos.push(urlData.publicUrl);
+      }
+      line.pendingFiles=[];
+      idbClearLinePhotos(line.id).catch(()=>{});
+    }
+
+    // Payload — inspector_email wordt meegestuurd in vehicle_data
+    const payload={
+      vin,
+      vehicle_data:{
+        ...state.vehicle,
+        inspector_email: currentUser.email,   // ← inspecteur tracking
+      },
+      damage_lines:state.damageLines.map(l=>({
+        id:l.id,locatie:l.locatie,slijtage:l.slijtage,
+        types:l.types,herstel:l.herstel,opmerking:l.opmerking,photos:l.photos||[]
+      })),
+      updated_at:new Date().toISOString()
+      // 'verwerkt' wordt NIET hier overschreven — dat doen we apart
+    };
+
+    const{error:uErr}=await sb.from('inspections').upsert(payload,{onConflict:'vin',ignoreDuplicates:false});
+    if(uErr)throw uErr;
+
+    save();
+    state.damageLines.forEach(l=>renderPhotos(l.id));
+    const now=new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+    setSyncStatus('ok',now);
+    const lbl=document.getElementById('last-saved-label');
+    if(lbl)lbl.textContent=`Opgeslagen om ${now}`;
+    if(showFeedback)showToast('☁️ Opgeslagen in cloud!');
+
+  }catch(err){
+    console.error(err);
+    setSyncStatus('error','Fout');
+    if(showFeedback)showToast('❌ '+err.message);
+  }finally{
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Opslaan';}
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  STATUS 'VERWERKT' TOGGLE
+// ═══════════════════════════════════════════════
+async function toggleVerwerkt(vin, currentStatus) {
+  const newStatus = !currentStatus;
+  try {
+    const{error}=await sb.from('inspections').update({verwerkt:newStatus}).eq('vin',vin);
+    if(error)throw error;
+    showToast(newStatus?'✅ Gemarkeerd als verwerkt':'↩️ Teruggezet naar open');
+    fetchDashboard();
+    populateDlSelect();
+  }catch(err){
+    showToast('❌ '+err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  VERWIJDER INSPECTIE (dubbele verificatie)
+// ═══════════════════════════════════════════════
+function confirmDeleteInspection(vin, displayName) {
+  document.getElementById('confirm-title').textContent = 'Inspectie verwijderen?';
+  document.getElementById('confirm-msg').textContent =
+    `Weet je zeker dat je "${displayName}" (${vin}) definitief wilt verwijderen? Dit kan niet ongedaan worden gemaakt!`;
+  document.getElementById('confirm-overlay').classList.add('open');
+  document.getElementById('confirm-ok-btn').onclick = ()=>executeDeleteInspection(vin);
+}
+function closeConfirm(){document.getElementById('confirm-overlay').classList.remove('open');}
+
+async function executeDeleteInspection(vin){
+  closeConfirm(); closeModal();
+  try{
+    const{error}=await sb.from('inspections').delete().eq('vin',vin);
+    if(error)throw error;
+    showToast('🗑️ Inspectie verwijderd');
+    fetchDashboard(); populateDlSelect();
+  }catch(err){
+    showToast('❌ '+err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  SUPABASE – FETCH DASHBOARD
+// ═══════════════════════════════════════════════
+async function fetchDashboard(){
+  const container=document.getElementById('dashboard-list');
+  if(!container)return;
+  container.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);"><div class="spinner" style="margin:0 auto 8px;"></div><div>Ophalen…</div></div>';
+  try{
+    const{data,error}=await sb.from('inspections')
+      .select('vin,vehicle_data,damage_lines,updated_at,verwerkt')
+      .order('updated_at',{ascending:false})
+      .limit(50);
+    if(error)throw error;
+    dashboardData=data||[];
+    buildInspectorFilter(dashboardData);
+    renderDashboard(dashboardData);
+  }catch(err){
+    console.error(err);
+    container.innerHTML=`<div style="padding:16px;"><div class="status-banner error">⚠️ ${esc(err.message)}</div></div>`;
+  }
+}
+
+function buildInspectorFilter(rows){
+  const sel=document.getElementById('dash-filter-inspector');
+  const current=sel.value;
+  const emails=[...new Set(rows.map(r=>(r.vehicle_data||{}).inspector_email).filter(Boolean))];
+  sel.innerHTML='<option value="">Alle inspecteurs</option>';
+  emails.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;sel.appendChild(o);});
+  sel.value=current;
+}
+
+function applyDashFilters(){
+  const search=document.getElementById('dash-search').value.trim().toUpperCase();
+  const inspector=document.getElementById('dash-filter-inspector').value;
+  const status=document.getElementById('dash-filter-status').value;
+  let filtered=dashboardData;
+  if(search) filtered=filtered.filter(r=>r.vin.toUpperCase().includes(search));
+  if(inspector) filtered=filtered.filter(r=>(r.vehicle_data||{}).inspector_email===inspector);
+  if(status==='open') filtered=filtered.filter(r=>!r.verwerkt);
+  if(status==='done') filtered=filtered.filter(r=>r.verwerkt);
+  renderDashboard(filtered);
+}
+
+function renderDashboard(rows){
+  const container=document.getElementById('dashboard-list');
+  if(!rows||rows.length===0){
+    container.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);">Geen inspecties gevonden.</div>';
+    return;
+  }
+  container.innerHTML='';
+  rows.forEach(row=>{
+    const v=row.vehicle_data||{};
+    const lines=row.damage_lines||[];
+    const photoCount=lines.reduce((acc,l)=>acc+(l.photos||[]).length,0);
+    const date=row.updated_at?new Date(row.updated_at).toLocaleDateString('nl-NL'):'–';
+    const verwerkt=!!row.verwerkt;
+    const card=document.createElement('div');
+    card.className='inspection-card';
+    card.onclick=()=>openDetailModal(row);
+    card.innerHTML=`
+      <div class="ic-top">
+        <div>
+          <div class="ic-name">${esc(v.merk||'')} ${esc(v.type||'Onbekend voertuig')}
+            ${verwerkt?'<span class="verwerkt-badge" style="margin-left:6px;font-size:11px;">✅ Verwerkt</span>':''}
+          </div>
+          <div class="ic-vin">${esc(row.vin)}</div>
+        </div>
+        <div class="ic-date">${date}</div>
+      </div>
+      <div class="ic-meta">
+        ${v.kleur?`<span class="ic-tag">🎨 ${esc(v.kleur)}</span>`:''}
+        ${v.kmstand?`<span class="ic-tag">📍 ${v.kmstand} km</span>`:''}
+        <span class="ic-tag blue">🔍 ${lines.length} schade${lines.length!==1?'s':''}</span>
+        ${photoCount>0?`<span class="ic-tag green">📷 ${photoCount}</span>`:''}
+      </div>
+      ${v.inspector_email?`<div class="ic-inspector">👤 ${esc(v.inspector_email)}</div>`:''}`;
+    container.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  DETAIL MODAL
+// ═══════════════════════════════════════════════
+function openDetailModal(row){
+  const v=row.vehicle_data||{};
+  const lines=row.damage_lines||[];
+  const verwerkt=!!row.verwerkt;
+  const modal=document.getElementById('detail-modal');
+  const title=document.getElementById('modal-title');
+  const body=document.getElementById('modal-body');
+  title.textContent=`${v.merk||''} ${v.type||'Onbekend'} – ${row.vin}`;
+
+  const vFields=[
+    ['Merk',v.merk],['Type',v.type],['Kleur',v.kleur],
+    ['Aandrijving',v.aandrijving],['Transmissie',v.transmissie],['Bekleding',v.bekleding],
+    ['KM-stand',v.kmstand?v.kmstand+' km':null],
+    ['Tot service',v.service_val?v.service_val+' '+(v.service_unit||'km'):null],
+    ['Inspecteur',v.inspector_email]
+  ].filter(([,val])=>val);
+
+  let html=`
+    <!-- Status badge -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      ${verwerkt
+        ?`<span class="verwerkt-badge">✅ Volledig Verwerkt</span>`
+        :`<span style="background:var(--warning-light);color:var(--warning);border:1px solid var(--warning);border-radius:100px;padding:3px 10px;font-size:12px;font-weight:700;">⏳ Nog te verwerken</span>`}
+      <button class="btn btn-sm ${verwerkt?'btn-muted':'btn-success'}" onclick="toggleVerwerkt('${row.vin}',${verwerkt})">
+        ${verwerkt?'↩️ Zet terug naar open':'✅ Markeer als Volledig Verwerkt'}
+      </button>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">🚗 Voertuiggegevens</div>
+      ${vFields.map(([k,val])=>`<div class="detail-row"><span class="detail-key">${esc(k)}</span><span class="detail-val">${esc(String(val))}</span></div>`).join('')}
+    </div>`;
+
+  if(lines.length>0){
+    html+=`<div class="detail-section"><div class="detail-section-title">🔍 Schadelijnen (${lines.length})</div>`;
+    lines.forEach((l,i)=>{
+      const photos=l.photos||[];
+      html+=`<div class="damage-detail-item">
+        <div class="ddi-loc">${i+1}. ${esc(l.locatie||'Locatie onbekend')}</div>
+        ${l.slijtage?`<div class="ddi-row">Slijtage: <span class="ddi-val">${esc(l.slijtage)}</span></div>`:''}
+        ${l.types&&l.types.length?`<div class="ddi-row">Type: <span class="ddi-val">${esc(l.types.join(', '))}</span></div>`:''}
+        ${l.herstel&&l.herstel.length?`<div class="ddi-row">Herstel: <span class="ddi-val">${esc(l.herstel.join(', '))}</span></div>`:''}
+        ${l.opmerking?`<div class="ddi-row">Opmerking: <span class="ddi-val">${esc(l.opmerking)}</span></div>`:''}
+        ${photos.length>0?`<div class="photo-gallery">${photos.map(url=>`<img src="${url}" onclick="window.open('${url}','_blank')" loading="lazy">`).join('')}</div>`:''}
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // Acties
+  html+=`
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-primary btn-full" onclick="loadInspectionIntoForm(${JSON.stringify(row).replace(/"/g,'&quot;')});closeModal()">📲 Laden in inspectieformulier</button>
+      <button class="btn btn-danger-soft btn-full" onclick="confirmDeleteInspection('${row.vin}','${esc(v.merk||'')} ${esc(v.type||'')}')">🗑️ Inspectie verwijderen</button>
+    </div>`;
+
+  body.innerHTML=html;
+  modal.classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function closeModal(){document.getElementById('detail-modal').classList.remove('open');document.body.style.overflow='';}
+function closeModalOnBg(e){if(e.target===document.getElementById('detail-modal'))closeModal();}
+
+function loadInspectionIntoForm(row){
+  state.vehicle={...row.vehicle_data,vin:row.vin};
+  state.damageLines=(row.damage_lines||[]).map(l=>({...l,pendingFiles:[],photos:l.photos||[],collapsed:false}));
+  save();
+  fillVehicle();
+  const container=document.getElementById('damage-lines');
+  container.innerHTML='';
+  state.damageLines.forEach(l=>renderLine(l));
+  updateCount();
+  setSyncStatus('ok','Geladen');
+  showToast('✅ Inspectie geladen!');
+  switchTab('inspectie',document.querySelector('.tab-btn'));
+}
+
+// ═══════════════════════════════════════════════
+//  DOWNLOAD MANAGER
+// ═══════════════════════════════════════════════
+let allDlRows=[];
+
+async function populateDlSelect(){
+  const sel=document.getElementById('dl-select');
+  if(!sel)return;
+  try{
+    const{data,error}=await sb.from('inspections')
+      .select('vin,vehicle_data,damage_lines,verwerkt')
+      .order('updated_at',{ascending:false})
+      .limit(50);
+    if(error)throw error;
+    allDlRows=data||[];
+    renderDlSelect(allDlRows);
+  }catch(e){
+    sel.innerHTML='<option value="">Fout bij laden…</option>';
+  }
+}
+
+function renderDlSelect(rows){
+  const sel=document.getElementById('dl-select');
+  sel.innerHTML='<option value="">Kies een inspectie…</option>';
+  rows.forEach(row=>{
+    const v=row.vehicle_data||{};
+    const opt=document.createElement('option');
+    opt.value=row.vin;
+    const verwerktLabel=row.verwerkt?' ✅':'';
+    opt.textContent=`${v.merk||''} ${v.type||''} – ${row.vin}${verwerktLabel}`.trim();
+    opt._rowData=row;
+    sel.appendChild(opt);
+  });
+}
+
+function filterDlSelect(){
+  const q=document.getElementById('dl-search').value.trim().toUpperCase();
+  if(!q){renderDlSelect(allDlRows);return;}
+  const filtered=allDlRows.filter(r=>r.vin.toUpperCase().includes(q));
+  renderDlSelect(filtered);
+  // Auto-select als er maar 1 resultaat is
+  if(filtered.length===1){
+    const sel=document.getElementById('dl-select');
+    sel.value=filtered[0].vin;
+    loadDownloadManager();
+  }
+}
+
+function loadDownloadManager(){
+  const sel=document.getElementById('dl-select');
+  const container=document.getElementById('download-list');
+  const banner=document.getElementById('dl-banner');
+  if(!sel||!container)return;
+  const opt=sel.options[sel.selectedIndex];
+  const row=opt?opt._rowData:null;
+  if(!row){container.innerHTML='';return;}
+
+  const v=row.vehicle_data||{};
+  const lines=row.damage_lines||[];
+  const verwerkt=!!row.verwerkt;
+  const allPhotos=[];
+  lines.forEach(l=>{
+    (l.photos||[]).forEach((url,i)=>{
+      allPhotos.push({url,name:`${row.vin}_${(l.locatie||'schade').replace(/\s+/g,'_')}_foto${i+1}.jpg`,locatie:l.locatie||'Schade'});
+    });
+  });
+
+  if(allPhotos.length===0){
+    container.innerHTML='<div class="status-banner warning" style="margin-top:0;">⚠️ Geen foto\'s gevonden voor deze inspectie.</div>';
+    banner.className='status-banner warning'; banner.textContent='⚠️ Geen foto\'s gevonden.';
+    return;
+  }
+
+  banner.className='status-banner success';
+  banner.textContent=`✓ ${allPhotos.length} foto${allPhotos.length!==1?"'s":""} gevonden.${verwerkt?' ✅ Verwerkt':''}`;
+
+  const isIOS=/iP(hone|od|ad)/.test(navigator.userAgent);
+  const inspEmail=(v.inspector_email||'Onbekend');
+
+  // Bouw foto galerij grid
+  const thumbsHtml=allPhotos.map((photo,i)=>`
+    <div class="pg-thumb" title="${esc(photo.locatie)} – foto ${i+1}" onclick="window.open('${photo.url}','_blank')">
+      <img src="${photo.url}" loading="lazy" onerror="this.parentElement.style.background='var(--border)'" />
+      <div class="pg-loc-label">${esc(photo.locatie)}</div>
+    </div>`).join('');
+
+  let html=`<div class="card">
+    <div class="card-header">
+      <div class="card-icon">🖼️</div>
+      <div class="card-title">${allPhotos.length} foto${allPhotos.length!==1?"'s":""} – ${esc(row.vin)}</div>
+      ${verwerkt?'<span class="verwerkt-badge">✅ Verwerkt</span>':''}
+    </div>
+    <div style="padding:9px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;">
+      <span>👤 <strong>${esc(inspEmail)}</strong></span>
+      <span>${lines.length} schadelijn${lines.length!==1?'en':''}</span>
+    </div>`;
+
+  if(isIOS){
+    html+=`<div style="padding:10px 14px;background:var(--blue-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--blue);font-weight:600;">
+      📱 iPhone/iPad: foto's worden als één ZIP-bestand gedownload → open via Bestanden-app
+    </div>`;
+  }
+
+  // Foto grid
+  html+=`<div style="padding:10px 12px;">
+    <div class="photo-gallery-grid">${thumbsHtml}</div>
+  </div>`;
+
+  // ZIP download knop (werkt op alle platformen)
+  html+=`<div style="padding:0 12px 12px;">
+    <button class="btn btn-primary btn-full" id="dl-all-btn" onclick="downloadAllSequential(${JSON.stringify(allPhotos)},this)">
+      📦 Alle ${allPhotos.length} foto${allPhotos.length!==1?"'s":""} downloaden als ZIP
+    </button>
+  </div>`;
+
+  // Verwerkt toggle
+  html+=`<div style="padding:0 12px 12px;">
+    <button class="btn ${verwerkt?'btn-muted':'btn-success'} btn-full" onclick="toggleVerwerktFromDl('${row.vin}',${verwerkt})">
+      ${verwerkt?'↩️ Zet terug naar open':'✅ Markeer als Volledig Verwerkt'}
+    </button>
+  </div>`;
+
+  html+=`</div>`;
+  container.innerHTML=html;
+}
+
+async function toggleVerwerktFromDl(vin,current){
+  await toggleVerwerkt(vin,current);
+  await populateDlSelect();
+  // Herlaad dezelfde inspectie
+  const sel=document.getElementById('dl-select');
+  if(sel){sel.value=vin;loadDownloadManager();}
+}
+
+function downloadPhoto(url,filename){
+  const a=document.createElement('a');
+  a.href=url; a.download=filename; a.target='_blank';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function downloadAllSequential(photos, btnEl){
+  if(!photos||!photos.length) return;
+  const vin = photos[0].name.split('_')[0] || 'Inspectie';
+  const total = photos.length;
+
+  const setText = txt => { if(btnEl){ btnEl.disabled=true; btnEl.textContent=txt; } };
+  setText(`⏳ Bezig met inpakken… 0 / ${total} foto's`);
+
+  try {
+    const zip = new JSZip();
+    const folder = zip.folder(vin);
+
+    for(let i=0; i<photos.length; i++){
+      setText(`⏳ Bezig met inpakken… ${i+1} / ${total} foto's`);
+      const response = await fetch(photos[i].url);
+      if(!response.ok) throw new Error(`Foto ${i+1} kon niet worden opgehaald`);
+      const blob = await response.blob();
+      const ext = blob.type.includes('png') ? 'png' : 'jpg';
+      const filename = `${(photos[i].locatie||'schade').replace(/[^a-zA-Z0-9_\-]/g,'_')}_foto${i+1}.${ext}`;
+      folder.file(filename, blob);
+    }
+
+    setText(`📦 ZIP wordt aangemaakt…`);
+    const zipBlob = await zip.generateAsync({ type:'blob', compression:'DEFLATE', compressionOptions:{level:6} });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(zipBlob);
+    a.download = `Inspectie_${vin}.zip`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+
+    if(btnEl){ btnEl.disabled=false; btnEl.textContent=`✓ ZIP gedownload (${total} foto's)`; }
+    showToast(`✓ Inspectie_${vin}.zip gedownload!`);
+
+  } catch(err) {
+    console.error(err);
+    if(btnEl){ btnEl.disabled=false; btnEl.textContent=`⬇ Alle ${total} foto's downloaden`; }
+    showToast('❌ ZIP mislukt: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  EXPORTS
+// ═══════════════════════════════════════════════
+function copyAll(){
+  const v=state.vehicle;
+  let text=`INSPECTIES LINKEN\n${[v.merk,v.type].filter(Boolean).join(' ')||'–'} | VIN: ${v.vin||'–'}\n\n`;
+  state.damageLines.forEach((line,i)=>{text+=`${i+1}. ${buildOutput(line).join(' | ')}\n`;});
+  if(!state.damageLines.length)text+='(Geen schadelijnen)\n';
+  navigator.clipboard.writeText(text).then(()=>showToast('Gekopieerd ✓')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Gekopieerd ✓');
+  });
+}
+
+function handleVINInput(el){
+  el.value=el.value.toUpperCase().replace(/[IOQ]/g,'');
+  state.vehicle.vin=el.value;save();
+  const errEl=document.getElementById('vin-error');
+  const okEl=document.getElementById('vin-ok');
+  const val=el.value.trim();
+  if(!val.length){errEl.style.display='none';okEl.style.display='none';el.style.borderColor='';}
+  else if(val.length<17){errEl.textContent=`Nog ${17-val.length} karakter${17-val.length===1?'':'s'} nodig (${val.length}/17)`;errEl.style.display='block';okEl.style.display='none';el.style.borderColor='var(--danger)';}
+  else{errEl.style.display='none';okEl.style.display='block';el.style.borderColor='var(--success)';}
+}
+
+function copyVIN(){
+  const vin=document.getElementById('v_vin').value.trim();
+  if(!vin){showToast('Geen VIN ingevuld');return;}
+  if(vin.length!==17){showToast('VIN moet exact 17 karakters zijn');return;}
+  navigator.clipboard.writeText(vin).then(()=>showToast('VIN gekopieerd ✓')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=vin;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('VIN gekopieerd ✓');
+  });
+}
+
+function exportWhatsApp(){
+  const v=state.vehicle;
+  const inspector=currentUser?currentUser.email:'';
+  let text=`🚗 *Inspecties Linken*\n\n*${[v.merk,v.type].filter(Boolean).join(' ')||'Voertuig'}*\n`;
+  if(v.vin)text+=`VIN: ${v.vin}\n`;
+  if(v.kleur)text+=`Kleur: ${v.kleur}\n`;
+  if(v.aandrijving)text+=`Aandrijving: ${v.aandrijving}\n`;
+  if(v.transmissie)text+=`Transmissie: ${v.transmissie}\n`;
+  if(v.bekleding)text+=`Bekleding: ${v.bekleding}\n`;
+  if(v.kmstand)text+=`KM: ${v.kmstand} km\n`;
+  if(v.service_val)text+=`Service: ${v.service_val} ${v.service_unit||'km'}\n`;
+  if(inspector)text+=`Inspecteur: ${inspector}\n`;
+  text+=`\n📋 *Schadelijnen (${state.damageLines.length})*\n`;
+  state.damageLines.forEach((line,i)=>{text+=`\n${i+1}. ${buildOutput(line).join(' | ')||'—'}\n`;});
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+}
+
+function exportPDF(){
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+  const W=210,M=14;
+  const blue=[0,122,255],dark=[13,17,23],muted=[107,117,133],light=[245,247,250],green=[52,199,89];
+  let y=0;
+
+  // Header
+  doc.setFillColor(...blue);doc.rect(0,0,W,22,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(15);
+  doc.text('Inspecties Linken',M,14);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);
+  doc.text(`Rapport – ${new Date().toLocaleDateString('nl-NL')}`,W-M,14,{align:'right'});
+  y=30;
+
+  // Inspector + status
+  const inspector=currentUser?currentUser.email:'';
+  if(inspector){
+    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text(`Inspecteur: ${inspector}`,M,y);
+    y+=8;
+  }
+
+  // Vehicle
+  const v=state.vehicle;
+  doc.setFillColor(...light);doc.roundedRect(M,y,W-2*M,52,2,2,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...muted);
+  doc.text('VOERTUIGGEGEVENS',M+4,y+6);
+  const vd=[['Merk',v.merk||'–'],['Type',v.type||'–'],['VIN',v.vin||'–'],['Kleur',v.kleur||'–'],
+    ['Aandrijving',v.aandrijving||'–'],['Transmissie',v.transmissie||'–'],['Bekleding',v.bekleding||'–'],
+    ['KM-stand',v.kmstand?v.kmstand+' km':'–'],['Tot service',v.service_val?v.service_val+' '+(v.service_unit||'km'):'–']];
+  doc.setFontSize(9);
+  vd.forEach(([k,val],i)=>{
+    const col=i%2,row2=Math.floor(i/2);
+    const cx=M+4+col*((W-2*M-8)/2),cy=y+13+row2*7;
+    doc.setFont('helvetica','normal');doc.setTextColor(...muted);doc.text(k+':',cx,cy);
+    doc.setFont('helvetica','bold');doc.setTextColor(...dark);doc.text(String(val),cx+26,cy);
+  });
+  y+=58;
+
+  // Schade sectie
+  doc.setFillColor(...blue);doc.rect(M,y,3,6,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...blue);
+  doc.text('SCHADELIJNEN',M+6,y+5);y+=12;
+
+  if(!state.damageLines.length){
+    doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(...muted);
+    doc.text('Geen schadelijnen geregistreerd.',M,y);
+  }
+
+  state.damageLines.forEach((line,li)=>{
+    if(y>260){doc.addPage();y=14;}
+    const parts=buildOutput(line);
+    const outputStr=parts.join(' | ')||'—';
+
+    doc.setFillColor(...light);doc.roundedRect(M,y,W-2*M,8,1.5,1.5,'F');
+    doc.setFillColor(...blue);doc.circle(M+5,y+4,3,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7);
+    doc.text(String(li+1),M+5,y+4.5,{align:'center'});
+    doc.setTextColor(...dark);doc.setFontSize(9);
+    doc.text(line.locatie||`Schadelijn ${li+1}`,M+11,y+5.5);
+    y+=11;
+
+    const fields=[
+      ['Slijtage',line.slijtage||'—'],
+      ['Type',line.types.join(', ')||'—'],
+      ['Herstelmethode',line.herstel.join(', ')||'—'],
+    ];
+    if(line.opmerking)fields.push(['Opmerking',line.opmerking]);
+    fields.forEach(([k,val])=>{
+      if(y>272){doc.addPage();y=14;}
+      doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...muted);doc.text(k+':',M+3,y);
+      doc.setFont('helvetica','normal');doc.setTextColor(...dark);
+      const ls=doc.splitTextToSize(val,W-2*M-32);doc.text(ls,M+32,y);y+=5*ls.length;
+    });
+
+    // Foto's in PDF
+    const photos=line.photos||[];
+    if(photos.length>0){
+      if(y>250){doc.addPage();y=14;}
+      doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...muted);
+      doc.text(`Foto's (${photos.length}):`,M+3,y);y+=5;
+      let px=M+3;
+      photos.slice(0,6).forEach((url,pi)=>{
+        try{
+          const imgW=28,imgH=21;
+          if(px+imgW>W-M){px=M+3;y+=imgH+3;}
+          if(y+imgH>270){doc.addPage();y=14;px=M+3;}
+          doc.addImage(url,'JPEG',px,y,imgW,imgH);
+          px+=imgW+3;
+        }catch(e){}
+      });
+      y+=24;
+    }
+
+    if(y>270){doc.addPage();y=14;}
+    doc.setFillColor(232,242,255);doc.roundedRect(M,y,W-2*M,7,1.5,1.5,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...blue);
+    doc.text(doc.splitTextToSize(outputStr,W-2*M-6)[0],M+3,y+4.5);
+    y+=13;
+  });
+
+  // Footer
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...muted);
+  doc.text('Inspecties Linken – Schade-expert rapport',M,291);
+  doc.text(new Date().toLocaleString('nl-NL'),W-M,291,{align:'right'});
+  doc.save(`Inspecties_${dateStamp()}.pdf`);
+  showToast('PDF opgeslagen ✓');
+}
+
+async function resetApp(){
+  if(!confirm('Alles wissen en opnieuw beginnen?'))return;
+  localStorage.removeItem('il3_state');
+  try{const db=await getIDB();const tx=db.transaction('photos','readwrite');tx.objectStore('photos').clear();tx.oncomplete=()=>location.reload();tx.onerror=()=>location.reload();}
+  catch(e){location.reload();}
+}
+
+// ═══════════════════════════════════════════════
+//  INDEXEDDB – OFFLINE FOTO OPSLAG
+// ═══════════════════════════════════════════════
+const fileIdbIds=new WeakMap();
+const IDB_NAME='il3_db',IDB_VER=1;
+let _idb=null;
+function getIDB(){
+  if(_idb)return Promise.resolve(_idb);
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(IDB_NAME,IDB_VER);
+    r.onupgradeneeded=e=>{e.target.result.createObjectStore('photos',{keyPath:'id',autoIncrement:true});};
+    r.onsuccess=e=>{_idb=e.target.result;res(_idb);};
+    r.onerror=()=>rej(r.error);
+  });
+}
+async function idbSavePhoto(lineId,file){
+  try{
+    const db=await getIDB();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction('photos','readwrite');
+      const req=tx.objectStore('photos').add({lineId,name:file.name,blob:file,ts:Date.now()});
+      req.onsuccess=()=>res(req.result);
+      tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){return null;}
+}
+async function idbGetPhotos(lineId){
+  try{
+    const db=await getIDB();
+    return new Promise(res=>{
+      const results=[];
+      const tx=db.transaction('photos','readonly');
+      tx.objectStore('photos').openCursor().onsuccess=e=>{
+        const c=e.target.result;
+        if(c){if(c.value.lineId===lineId)results.push({id:c.value.id,file:new File([c.value.blob],c.value.name,{type:'image/jpeg'})});c.continue();}
+        else res(results);
+      };
+    });
+  }catch(e){return[];}
+}
+async function idbDeletePhoto(id){
+  try{
+    const db=await getIDB();
+    return new Promise(res=>{
+      const tx=db.transaction('photos','readwrite');
+      tx.objectStore('photos').delete(id);
+      tx.oncomplete=()=>res();
+    });
+  }catch(e){}
+}
+async function idbClearLinePhotos(lineId){
+  try{
+    const db=await getIDB();
+    return new Promise(res=>{
+      const tx=db.transaction('photos','readwrite');
+      const store=tx.objectStore('photos');
+      store.openCursor().onsuccess=e=>{
+        const c=e.target.result;
+        if(c){if(c.value.lineId===lineId)c.delete();c.continue();}
+        else res();
+      };
+    });
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+//  OFFLINE STATUS
+// ═══════════════════════════════════════════════
+function updateOnlineStatus(){
+  const b=document.getElementById('offline-banner');
+  if(b)b.style.display=navigator.onLine?'none':'block';
+}
+window.addEventListener('online',updateOnlineStatus);
+window.addEventListener('offline',updateOnlineStatus);
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+function getLine(id){return state.damageLines.find(l=>l.id===id);}
+function esc(str){return(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function dateStamp(){const d=new Date();return`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;}
+
+let _tt;
+function showToast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2800);
+}
+</script>
+</body>
+</html>
