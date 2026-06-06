@@ -350,6 +350,19 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div class="add-row"><button class="btn btn-primary btn-full" onclick="addDamageLine()">+ Schadelijn toevoegen</button></div>
   </div>
 
+  <div class="card">
+    <div class="card-header"><div class="card-icon">📷</div><div class="card-title">Algemene foto's <span class="count-badge" id="general-photo-count">0</span></div></div>
+    <div class="card-body">
+      <div class="photo-zone" onclick="triggerGeneralPhotoInput()" id="general-photo-zone">
+        <div class="photo-zone-icon">📷</div>
+        <div class="photo-zone-text">Foto's toevoegen</div>
+        <div class="photo-zone-sub">Tik hier of sleep foto's neer</div>
+      </div>
+      <input type="file" id="general-photo-input" accept="image/*" multiple style="display:none" onchange="handleGeneralPhotoSelect(this.files)" />
+      <div class="photo-grid" id="general-photo-grid"></div>
+    </div>
+  </div>
+
   <div class="save-bar">
     <div style="font-size:22px;">☁️</div>
     <div class="save-bar-info">
@@ -492,7 +505,9 @@ const HERSTELMETHODE = ['Aanbrengen / polijsten','Lakken','Ozonbehandeling','Rei
 // ═══════════════════════════════════════════════
 let state = {
   vehicle: { merk:'', type:'', vin:'', kleur:'', aandrijving:'', transmissie:'', bekleding:'', kmstand:'', service_val:'', service_unit:'km' },
-  damageLines: []
+  damageLines: [],
+  generalPhotos: [],
+  generalPendingFiles: []
 };
 let currentUser = null;
 let syncStatus  = 'idle';
@@ -584,7 +599,21 @@ function bootApp() {
       }
       if(stored.length>0) renderPhotos(line.id);
     }
+    const storedGen=await idbGetPhotos('__general__').catch(()=>[]);
+    for(const {id,file} of storedGen){
+      state.generalPendingFiles.push(file);
+      fileIdbIds.set(file,id);
+    }
+    if(storedGen.length>0) renderGeneralPhotos();
   })();
+  // Drag & drop algemene foto zone
+  const genZone=document.getElementById('general-photo-zone');
+  if(genZone){
+    genZone.addEventListener('dragover',e=>{e.preventDefault();genZone.classList.add('drag-over');});
+    genZone.addEventListener('dragleave',()=>genZone.classList.remove('drag-over'));
+    genZone.addEventListener('drop',e=>{e.preventDefault();genZone.classList.remove('drag-over');handleGeneralPhotoSelect(e.dataTransfer.files);});
+  }
+  renderGeneralPhotos();
   setTimeout(() => { fetchDashboard(); populateDlSelect(); }, 700);
 }
 
@@ -595,6 +624,7 @@ function save() {
   try {
     const s = JSON.parse(JSON.stringify(state));
     s.damageLines.forEach(l => { delete l.pendingFiles; });
+    delete s.generalPendingFiles;
     localStorage.setItem('il3_state', JSON.stringify(s));
   } catch(e) {}
 }
@@ -603,6 +633,8 @@ function load() {
     const s = localStorage.getItem('il3_state');
     if (s) state = JSON.parse(s);
     state.damageLines.forEach(l => { if (!l.photos) l.photos=[]; if (!l.pendingFiles) l.pendingFiles=[]; });
+    if (!state.generalPhotos) state.generalPhotos=[];
+    if (!state.generalPendingFiles) state.generalPendingFiles=[];
   } catch(e) {}
 }
 
@@ -798,6 +830,56 @@ function renderPhotos(id){
 function removeUploadedPhoto(id,idx){const l=getLine(id);if(!l)return;l.photos.splice(idx,1);renderPhotos(id);save();scheduleAutoSave();}
 function removePendingPhoto(id,idx){const l=getLine(id);if(!l)return;const f=l.pendingFiles[idx];const iid=fileIdbIds.get(f);if(iid!=null)idbDeletePhoto(iid).catch(()=>{});l.pendingFiles.splice(idx,1);renderPhotos(id);save();}
 
+// ═══════════════════════════════════════════════
+//  ALGEMENE FOTO'S
+// ═══════════════════════════════════════════════
+function triggerGeneralPhotoInput(){const inp=document.getElementById('general-photo-input');inp.value='';inp.click();}
+
+async function handleGeneralPhotoSelect(files){
+  if(!state.generalPendingFiles)state.generalPendingFiles=[];
+  for(const file of Array.from(files)){
+    const c=await compressImage(file,1600);
+    state.generalPendingFiles.push(c);
+    idbSavePhoto('__general__',c).then(idbId=>{if(idbId!=null)fileIdbIds.set(c,idbId);}).catch(()=>{});
+  }
+  renderGeneralPhotos();save();
+}
+
+function renderGeneralPhotos(){
+  const grid=document.getElementById('general-photo-grid');if(!grid)return;
+  grid.innerHTML='';
+  const uploaded=state.generalPhotos||[];
+  const pending=state.generalPendingFiles||[];
+  uploaded.forEach((url,i)=>{
+    const w=document.createElement('div');
+    w.className='photo-thumb-wrap photo-upload-done';
+    w.innerHTML=`<img src="${url}" loading="lazy"><button class="photo-thumb-del" onclick="removeGeneralUploadedPhoto(${i})">✕</button>`;
+    grid.appendChild(w);
+  });
+  pending.forEach((file,i)=>{
+    const url=URL.createObjectURL(file);
+    const w=document.createElement('div');
+    w.className='photo-thumb-wrap';
+    w.innerHTML=`<img src="${url}"><button class="photo-thumb-del" onclick="removeGeneralPendingPhoto(${i})">✕</button>`;
+    grid.appendChild(w);
+  });
+  const total=uploaded.length+pending.length;
+  const zone=document.getElementById('general-photo-zone');
+  if(zone){
+    zone.querySelector('.photo-zone-text').textContent=total>0?"Meer foto's toevoegen":"Foto's toevoegen";
+    zone.querySelector('.photo-zone-sub').textContent=total>0?`${total} foto${total!==1?"'s":""} toegevoegd`:"Tik hier of sleep foto's neer";
+  }
+  const badge=document.getElementById('general-photo-count');
+  if(badge)badge.textContent=total;
+}
+
+function removeGeneralUploadedPhoto(idx){state.generalPhotos.splice(idx,1);renderGeneralPhotos();save();scheduleAutoSave();}
+function removeGeneralPendingPhoto(idx){
+  const f=state.generalPendingFiles[idx];
+  const iid=fileIdbIds.get(f);if(iid!=null)idbDeletePhoto(iid).catch(()=>{});
+  state.generalPendingFiles.splice(idx,1);renderGeneralPhotos();save();
+}
+
 function compressImage(file,maxWidth){
   return new Promise(resolve=>{
     const reader=new FileReader();
@@ -923,6 +1005,22 @@ async function saveToSupabase(showFeedback=true){
       idbClearLinePhotos(line.id).catch(()=>{});
     }
 
+    // Upload algemene foto's
+    if(!state.generalPhotos)state.generalPhotos=[];
+    if(!state.generalPendingFiles)state.generalPendingFiles=[];
+    for(let i=0;i<state.generalPendingFiles.length;i++){
+      const file=state.generalPendingFiles[i];
+      const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+      const path=`${vin}/__general__/${Date.now()}_${i}.${ext}`;
+      const{error:upErr}=await sb.storage.from('damage-photos').upload(path,file,{upsert:true});
+      if(upErr)throw upErr;
+      const{data:urlData}=sb.storage.from('damage-photos').getPublicUrl(path);
+      state.generalPhotos.push(urlData.publicUrl);
+    }
+    state.generalPendingFiles=[];
+    idbClearLinePhotos('__general__').catch(()=>{});
+    renderGeneralPhotos();
+
     // Payload — inspector_email wordt meegestuurd in vehicle_data
     const payload={
       vin,
@@ -935,6 +1033,7 @@ async function saveToSupabase(showFeedback=true){
         id:l.id,locatie:l.locatie,slijtage:l.slijtage,
         types:l.types,herstel:l.herstel,opmerking:l.opmerking,photos:l.photos||[]
       })),
+      general_photos:state.generalPhotos||[],
       updated_at:new Date().toISOString()
       // 'verwerkt' wordt NIET hier overschreven — dat doen we apart
     };
@@ -1153,12 +1252,15 @@ function closeModalOnBg(e){if(e.target===document.getElementById('detail-modal')
 function loadInspectionIntoForm(row){
   state.vehicle={...row.vehicle_data,vin:row.vin};
   state.damageLines=(row.damage_lines||[]).map(l=>({...l,pendingFiles:[],photos:l.photos||[],collapsed:false}));
+  state.generalPhotos=row.general_photos||[];
+  state.generalPendingFiles=[];
   save();
   fillVehicle();
   const container=document.getElementById('damage-lines');
   container.innerHTML='';
   state.damageLines.forEach(l=>renderLine(l));
   updateCount();
+  renderGeneralPhotos();
   setSyncStatus('ok','Geladen');
   showToast('✅ Inspectie geladen!');
   switchTab('inspectie',document.querySelector('.tab-btn'));
