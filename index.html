@@ -1107,7 +1107,7 @@ async function fetchDashboard(){
   container.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);"><div class="spinner" style="margin:0 auto 8px;"></div><div>Ophalen…</div></div>';
   try{
     const{data,error}=await sb.from('inspections')
-      .select('vin,vehicle_data,damage_lines,updated_at,verwerkt')
+      .select('vin,vehicle_data,damage_lines,general_photos,updated_at,verwerkt')
       .order('updated_at',{ascending:false})
       .limit(50);
     if(error)throw error;
@@ -1155,7 +1155,7 @@ function renderDashboard(rows){
   rows.forEach(row=>{
     const v=row.vehicle_data||{};
     const lines=row.damage_lines||[];
-    const photoCount=lines.reduce((acc,l)=>acc+(l.photos||[]).length,0);
+    const photoCount=lines.reduce((acc,l)=>acc+(l.photos||[]).length,0)+(row.general_photos||[]).length;
     const date=row.updated_at?new Date(row.updated_at).toLocaleDateString('nl-NL'):'–';
     const verwerkt=!!row.verwerkt;
     const card=document.createElement('div');
@@ -1234,6 +1234,14 @@ function openDetailModal(row){
     html+='</div>';
   }
 
+  const generalPhotos=row.general_photos||[];
+  if(generalPhotos.length>0){
+    html+=`<div class="detail-section">
+      <div class="detail-section-title">📷 Algemene foto's (${generalPhotos.length})</div>
+      <div class="photo-gallery">${generalPhotos.map(url=>`<img src="${url}" onclick="window.open('${url}','_blank')" loading="lazy">`).join('')}</div>
+    </div>`;
+  }
+
   // Acties
   html+=`
     <div style="display:flex;flex-direction:column;gap:8px;">
@@ -1276,7 +1284,7 @@ async function populateDlSelect(){
   if(!sel)return;
   try{
     const{data,error}=await sb.from('inspections')
-      .select('vin,vehicle_data,damage_lines,verwerkt')
+      .select('vin,vehicle_data,damage_lines,general_photos,verwerkt')
       .order('updated_at',{ascending:false})
       .limit(50);
     if(error)throw error;
@@ -1331,6 +1339,9 @@ function loadDownloadManager(){
     (l.photos||[]).forEach((url,i)=>{
       allPhotos.push({url,name:`${row.vin}_${(l.locatie||'schade').replace(/\s+/g,'_')}_foto${i+1}.jpg`,locatie:l.locatie||'Schade'});
     });
+  });
+  (row.general_photos||[]).forEach((url,i)=>{
+    allPhotos.push({url,name:`${row.vin}_algemeen_foto${i+1}.jpg`,locatie:'Algemeen'});
   });
 
   if(allPhotos.length===0){
