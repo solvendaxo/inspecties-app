@@ -519,6 +519,7 @@ function canEditInspection(row){
 let currentUser = null;
 let syncStatus  = 'idle';
 let autoSaveTimer = null;
+let isSaving = false;
 let dashboardData = []; // raw fetched rows for filtering
 
 // ═══════════════════════════════════════════════
@@ -979,6 +980,10 @@ function setSyncStatus(status,label){
 //  SUPABASE – SAVE (UPSERT)
 // ═══════════════════════════════════════════════
 async function saveToSupabase(showFeedback=true){
+  if(isSaving){
+    if(showFeedback)showToast('⏳ Bezig met opslaan, even geduld…');
+    return;
+  }
   const vin=state.vehicle.vin.trim();
   if(!vin||vin.length!==17){
     if(showFeedback)showToast('⚠️ Vul eerst een geldig 17-cijferig VIN in!');
@@ -986,6 +991,7 @@ async function saveToSupabase(showFeedback=true){
   }
   if(!currentUser){showToast('⚠️ Niet ingelogd!');return;}
 
+  isSaving=true;
   setSyncStatus('saving','Bezig…');
   const saveBtn=document.getElementById('save-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='…';}
@@ -1069,6 +1075,7 @@ async function saveToSupabase(showFeedback=true){
     setSyncStatus('error','Fout');
     if(showFeedback)showToast('❌ '+err.message);
   }finally{
+    isSaving=false;
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Opslaan';}
   }
 }
