@@ -507,8 +507,15 @@ let state = {
   vehicle: { merk:'', type:'', vin:'', kleur:'', aandrijving:'', transmissie:'', bekleding:'', kmstand:'', service_val:'', service_unit:'km' },
   damageLines: [],
   generalPhotos: [],
-  generalPendingFiles: []
+  generalPendingFiles: [],
+  createdBy: null
 };
+const ADMIN_EMAIL = 'solvenda.be@outlook.com';
+function canEditInspection(row){
+  if(!currentUser)return false;
+  if((currentUser.email||'').toLowerCase()===ADMIN_EMAIL)return true;
+  return !!row.created_by && row.created_by===currentUser.id;
+}
 let currentUser = null;
 let syncStatus  = 'idle';
 let autoSaveTimer = null;
@@ -635,6 +642,7 @@ function load() {
     state.damageLines.forEach(l => { if (!l.photos) l.photos=[]; if (!l.pendingFiles) l.pendingFiles=[]; });
     if (!state.generalPhotos) state.generalPhotos=[];
     if (!state.generalPendingFiles) state.generalPendingFiles=[];
+    if (state.createdBy === undefined) state.createdBy=null;
   } catch(e) {}
 }
 
@@ -1021,25 +1029,32 @@ async function saveToSupabase(showFeedback=true){
     idbClearLinePhotos('__general__').catch(()=>{});
     renderGeneralPhotos();
 
-    // Payload — inspector_email wordt meegestuurd in vehicle_data
+    // Payload — inspector_email/naam en created_by blijven behouden van de oorspronkelijke maker
+    const origEmail = state.vehicle.inspector_email || currentUser.email;
+    const origName  = state.vehicle.inspector_name || currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+    const ownerId   = state.createdBy || currentUser.id;
     const payload={
       vin,
       vehicle_data:{
         ...state.vehicle,
-        inspector_email: currentUser.email,
-        inspector_name: currentUser.user_metadata?.full_name || currentUser.email.split('@')[0],
+        inspector_email: origEmail,
+        inspector_name: origName,
       },
       damage_lines:state.damageLines.map(l=>({
         id:l.id,locatie:l.locatie,slijtage:l.slijtage,
         types:l.types,herstel:l.herstel,opmerking:l.opmerking,photos:l.photos||[]
       })),
       general_photos:state.generalPhotos||[],
+      created_by:ownerId,
       updated_at:new Date().toISOString()
       // 'verwerkt' wordt NIET hier overschreven — dat doen we apart
     };
 
     const{error:uErr}=await sb.from('inspections').upsert(payload,{onConflict:'vin',ignoreDuplicates:false});
     if(uErr)throw uErr;
+    state.createdBy=ownerId;
+    state.vehicle.inspector_email=origEmail;
+    state.vehicle.inspector_name=origName;
 
     save();
     state.damageLines.forEach(l=>renderPhotos(l.id));
@@ -1107,7 +1122,7 @@ async function fetchDashboard(){
   container.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);"><div class="spinner" style="margin:0 auto 8px;"></div><div>Ophalen…</div></div>';
   try{
     const{data,error}=await sb.from('inspections')
-      .select('vin,vehicle_data,damage_lines,general_photos,updated_at,verwerkt')
+      .select('vin,vehicle_data,damage_lines,general_photos,created_by,updated_at,verwerkt')
       .order('updated_at',{ascending:false})
       .limit(50);
     if(error)throw error;
@@ -1202,15 +1217,17 @@ function openDetailModal(row){
     ['Inspecteur',v.inspector_name||v.inspector_email]
   ].filter(([,val])=>val);
 
+  const canEdit=canEditInspection(row);
+
   let html=`
     <!-- Status badge -->
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       ${verwerkt
         ?`<span class="verwerkt-badge">✅ Volledig Verwerkt</span>`
         :`<span style="background:var(--warning-light);color:var(--warning);border:1px solid var(--warning);border-radius:100px;padding:3px 10px;font-size:12px;font-weight:700;">⏳ Nog te verwerken</span>`}
-      <button class="btn btn-sm ${verwerkt?'btn-muted':'btn-success'}" onclick="toggleVerwerkt('${row.vin}',${verwerkt})">
+      ${canEdit?`<button class="btn btn-sm ${verwerkt?'btn-muted':'btn-success'}" onclick="toggleVerwerkt('${row.vin}',${verwerkt})">
         ${verwerkt?'↩️ Zet terug naar open':'✅ Markeer als Volledig Verwerkt'}
-      </button>
+      </button>`:`<span style="background:var(--bg-2,#f0f1f3);color:var(--muted,#6b7585);border-radius:100px;padding:3px 10px;font-size:12px;font-weight:600;">🔒 Alleen-lezen</span>`}
     </div>
 
     <div class="detail-section">
@@ -1244,10 +1261,16 @@ function openDetailModal(row){
 
   // Acties
   html+=`
-    <div style="display:flex;flex-direction:column;gap:8px;">
+    <div style="display:flex;flex-direction:column;gap:8px;">`;
+  if(canEdit){
+    html+=`
       <button class="btn btn-primary btn-full" onclick="loadInspectionIntoForm(${JSON.stringify(row).replace(/"/g,'&quot;')});closeModal()">📲 Laden in inspectieformulier</button>
-      <button class="btn btn-danger-soft btn-full" onclick="confirmDeleteInspection('${row.vin}','${esc(v.merk||'')} ${esc(v.type||'')}')">🗑️ Inspectie verwijderen</button>
-    </div>`;
+      <button class="btn btn-danger-soft btn-full" onclick="confirmDeleteInspection('${row.vin}','${esc(v.merk||'')} ${esc(v.type||'')}')">🗑️ Inspectie verwijderen</button>`;
+  } else {
+    html+=`
+      <div style="text-align:center;color:var(--muted);font-size:12.5px;padding:6px 0;">🔒 Dit is de inspectie van een andere inspecteur — je kan deze enkel bekijken.</div>`;
+  }
+  html+=`</div>`;
 
   body.innerHTML=html;
   modal.classList.add('open');
@@ -1258,7 +1281,9 @@ function closeModal(){document.getElementById('detail-modal').classList.remove('
 function closeModalOnBg(e){if(e.target===document.getElementById('detail-modal'))closeModal();}
 
 function loadInspectionIntoForm(row){
+  if(!canEditInspection(row)){showToast('🔒 Je kan enkel je eigen inspecties bewerken');return;}
   state.vehicle={...row.vehicle_data,vin:row.vin};
+  state.createdBy=row.created_by||null;
   state.damageLines=(row.damage_lines||[]).map(l=>({...l,pendingFiles:[],photos:l.photos||[],collapsed:false}));
   state.generalPhotos=row.general_photos||[];
   state.generalPendingFiles=[];
@@ -1284,7 +1309,7 @@ async function populateDlSelect(){
   if(!sel)return;
   try{
     const{data,error}=await sb.from('inspections')
-      .select('vin,vehicle_data,damage_lines,general_photos,verwerkt')
+      .select('vin,vehicle_data,damage_lines,general_photos,created_by,verwerkt')
       .order('updated_at',{ascending:false})
       .limit(50);
     if(error)throw error;
@@ -1392,12 +1417,14 @@ function loadDownloadManager(){
     </button>
   </div>`;
 
-  // Verwerkt toggle
-  html+=`<div style="padding:0 12px 12px;">
-    <button class="btn ${verwerkt?'btn-muted':'btn-success'} btn-full" onclick="toggleVerwerktFromDl('${row.vin}',${verwerkt})">
-      ${verwerkt?'↩️ Zet terug naar open':'✅ Markeer als Volledig Verwerkt'}
-    </button>
-  </div>`;
+  // Verwerkt toggle (enkel eigenaar/beheerder)
+  if(canEditInspection(row)){
+    html+=`<div style="padding:0 12px 12px;">
+      <button class="btn ${verwerkt?'btn-muted':'btn-success'} btn-full" onclick="toggleVerwerktFromDl('${row.vin}',${verwerkt})">
+        ${verwerkt?'↩️ Zet terug naar open':'✅ Markeer als Volledig Verwerkt'}
+      </button>
+    </div>`;
+  }
 
   html+=`</div>`;
   container.innerHTML=html;
