@@ -1547,6 +1547,29 @@ function exportPDF(){
   });
   y+=58;
 
+  // Algemene foto's sectie
+  const generalPhotos=state.generalPhotos||[];
+  if(generalPhotos.length>0){
+    if(y>260){doc.addPage();y=14;}
+    doc.setFillColor(...blue);doc.rect(M,y,3,6,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...blue);
+    doc.text("ALGEMENE FOTO'S",M+6,y+5);y+=12;
+
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...muted);
+    doc.text(`Foto's (${generalPhotos.length}):`,M+3,y);y+=5;
+    let gpx=M+3;
+    generalPhotos.forEach((url,pi)=>{
+      try{
+        const imgW=28,imgH=21;
+        if(gpx+imgW>W-M){gpx=M+3;y+=imgH+3;}
+        if(y+imgH>270){doc.addPage();y=14;gpx=M+3;}
+        doc.addImage(url,'JPEG',gpx,y,imgW,imgH);
+        gpx+=imgW+3;
+      }catch(e){}
+    });
+    y+=24;
+  }
+
   // Schade sectie
   doc.setFillColor(...blue);doc.rect(M,y,3,6,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...blue);
